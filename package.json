@@ -1,0 +1,14 @@
+{
+  "name": "healthcheck",
+  "version": "1.0.0",
+  "description": "Health check service with Express",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.9"
+  }
+}
