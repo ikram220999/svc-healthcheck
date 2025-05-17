@@ -14,7 +14,7 @@ async function checkStatus(baseUrl, healthCheckUrl) {
             }
         });
         
-        if (response.ok) {
+        if (!response.ok) {
             return {
                 status: false,
                 timestamp: new Date().toISOString(),

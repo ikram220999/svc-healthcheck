@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  healthcheck:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - PORT=3000
+      - HEALTHCHECK_HOST=http://example.com
+      - HEALTHCHECK_URL=/health
+      - CHECK_INTERVAL_MS=60000
+    restart: unless-stopped 

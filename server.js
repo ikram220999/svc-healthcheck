@@ -31,7 +31,7 @@ const HEALTHCHECK_URL = process.env.HEALTHCHECK_URL || '/api/status';
 // Define the status endpoint
 app.get('/api/status', (req, res) => {
     res.json({ 
-        status: 'ok',
+        status: true,
         timestamp: new Date().toISOString(),
         responseTimeMs: 0
     });
