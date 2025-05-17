@@ -8,59 +8,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'status-up': '#40c463',
-                        'status-down': '#dc3545',
-                        'status-degraded': '#ffa500',
-                    },
-                    fontFamily: {
-                        'sans': ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
-    <style>
-        .grid-cols-53 {
-            grid-template-columns: repeat(53, minmax(0, 1fr));
-        }
-        body {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        .timeline-cell {
-            width: 100%;
-            height: 24px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-        .timeline-cell:hover {
-            transform: scaleY(1.2);
-        }
-        .timeline-grid {
-            display: grid;
-            grid-template-columns: repeat(24, 1fr);
-            gap: 4px;
-            margin-top: 8px;
-        }
-        .hour-label {
-            font-size: 10px;
-            color: #6B7280;
-            text-align: center;
-            margin-top: 4px;
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/tailwind.config.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="bg-white rounded-lg shadow-sm p-6">
             <!-- Header -->
             <div class="mb-8">
-                <h1 class="text-2xl font-bold tracking-tight text-gray-900">Website Uptime Status</h1>
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900">Uptime Status</h1>
                 <p class="mt-1 text-sm font-medium text-gray-500">Daily uptime monitoring</p>
             </div>
 
@@ -89,260 +46,32 @@
         </div>
     </div>
 
+    <!-- Modal for hourly detail -->
+    <div id="hourlyDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle" class="text-lg font-semibold mb-4"></h2>
+            <div class="mb-4 text-sm text-gray-600" id="modalStats"></div>
+            <div>
+                <canvas id="responseTimeChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JavaScript files -->
+    <script src="js/app.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/statusDisplay.js"></script>
+    
+    <!-- Initialize the application -->
     <script>
-        // Function to load and parse the status data
-        async function loadStatusData() {
-            try {
-                const response = await fetch('/api/logs');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                return data;
-            } catch (error) {
-                console.error('Error loading status data:', error);
-                return [];
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof initializeStatusDisplay === 'function') {
+                initializeStatusDisplay();
+            } else {
+                console.error('initializeStatusDisplay function not found');
             }
-        }
-
-        // Function to determine status color based on status value
-        function getStatusColor(status) {
-            return status ? 'bg-status-up' : 'bg-status-down';
-        }
-
-        // Function to format date for display
-        function formatDate(date) {
-            return date.toLocaleDateString('en-US', { 
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-        }
-
-        // Main function to initialize the status display
-        async function initializeStatusDisplay() {
-            const statusData = await loadStatusData();
-            const timelineContainer = document.querySelector('.space-y-6');
-            
-            // Clear existing content
-            timelineContainer.innerHTML = '';
-
-            // Get today's date string for comparison
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-
-            // Process data for each date
-            Object.entries(statusData).forEach(([dateStr, dayData]) => {
-                if (!dayData || dayData.length === 0) return;
-
-                const date = new Date(dateStr);
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-                
-                // Check if this is today's data
-                const isToday = dateStr === todayStr;
-                
-                const dayContainer = document.createElement('div');
-                // Apply special styling for today's stats
-                dayContainer.className = isToday 
-                    ? 'bg-white rounded-lg p-6 shadow-md border-2 border-blue-400 relative' 
-                    : 'bg-white rounded-lg p-4 shadow-sm';
-                
-                // Add "Today" badge if this is today's data
-                if (isToday) {
-                    const todayBadge = document.createElement('div');
-                    todayBadge.className = 'absolute -top-3 -right-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm';
-                    todayBadge.textContent = 'TODAY';
-                    dayContainer.appendChild(todayBadge);
-                }
-                
-                const dayHeader = document.createElement('div');
-                dayHeader.className = 'flex justify-between items-center mb-3';
-                
-                const timeline = document.createElement('div');
-                timeline.className = 'timeline-grid';
-                
-                let upCount = 0;
-                let failedCount = 0;
-                let totalDataPoints = 0;
-                
-                // Initialize hourly data array
-                const hourlyData = Array(24).fill(null);
-                const hourlyScans = Array(24).fill(0);
-                
-                // Group data by hour
-                dayData.forEach(entry => {
-                    const entryDate = new Date(entry.timestamp);
-                    const hour = entryDate.getHours();
-                    hourlyData[hour] = entry.data.status;
-                    hourlyScans[hour]++;
-                    
-                    // Count uptime and downtime based on status
-                    if (entry.data.status === true) {
-                        upCount++;
-                    } else if (entry.data.status === false) {
-                        failedCount++;
-                    }
-                    totalDataPoints++;
-                });
-                
-                // Generate 24 hours of timeline
-                for (let hour = 0; hour < 24; hour++) {
-                    const hourContainer = document.createElement('div');
-                    hourContainer.className = 'flex flex-col items-center';
-                    
-                    const cell = document.createElement('div');
-                    // Make today's timeline cells larger
-                    cell.className = isToday ? 'timeline-cell h-7' : 'timeline-cell';
-                    
-                    const status = hourlyData[hour];
-                    const scans = hourlyScans[hour];
-                    
-                    if (scans > 0) {
-                        cell.classList.add(getStatusColor(status));
-                    } else {
-                        cell.classList.add('bg-gray-200');
-                    }
-                    
-                    // Add detailed tooltip with response time
-                    const hourData = dayData.filter(entry => {
-                        const entryDate = new Date(entry.timestamp);
-                        return entryDate.getHours() === hour;
-                    });
-                    
-                    const responseTimes = hourData.map(entry => entry.data.responseTimeMs);
-                    const avgResponseTime = responseTimes.length > 0 
-                        ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(2)
-                        : 'N/A';
-                    
-                    cell.title = `${hour}:00 - ${hour + 1}:00\nStatus: ${status ? 'Up' : 'Down'}\nScans: ${scans}\nAvg Response: ${avgResponseTime}ms`;
-                    
-                    const hourLabel = document.createElement('div');
-                    hourLabel.className = 'hour-label';
-                    hourLabel.textContent = `${hour}:00`;
-                    
-                    hourContainer.appendChild(cell);
-                    hourContainer.appendChild(hourLabel);
-                    timeline.appendChild(hourContainer);
-                }
-                
-                // Calculate uptime percentage only for hours with data
-                const uptimePercentage = totalDataPoints > 0 ? ((upCount / totalDataPoints) * 100).toFixed(1) : '0.0';
-                
-                // Create status indicator
-                const statusColor = uptimePercentage >= 99.9 ? 'text-status-up' : 
-                                  uptimePercentage >= 99 ? 'text-status-degraded' : 
-                                  'text-status-down';
-                
-                // Format the full date
-                const fullDate = date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                });
-                
-                // Make today's header text larger
-                const textSizeClass = isToday ? 'text-base font-semibold' : 'text-sm font-medium';
-                const uptimeTextClass = isToday ? 'text-sm font-bold' : 'text-xs font-medium';
-                
-                dayHeader.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <h3 class="${textSizeClass} text-gray-900">${dayName} (${fullDate})</h3>
-                        <span class="${uptimeTextClass} ${statusColor}">${uptimePercentage}% uptime</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-xs font-medium">
-                        <span class="text-status-up">${upCount} up</span>
-                        <span class="text-gray-400">•</span>
-                        <span class="text-status-down">${failedCount} down</span>
-                        <span class="text-gray-400">•</span>
-                        <span class="text-gray-500">${totalDataPoints} total scans</span>
-                    </div>
-                `;
-                
-                dayContainer.appendChild(dayHeader);
-                dayContainer.appendChild(timeline);
-                
-                // Insert today's data at the top
-                if (isToday) {
-                    timelineContainer.insertBefore(dayContainer, timelineContainer.firstChild);
-                } else {
-                    timelineContainer.appendChild(dayContainer);
-                }
-            });
-            
-            // Add today summary card at the top if available
-            const todayData = statusData[todayStr];
-            
-            if (todayData && todayData.length > 0) {
-                // Calculate today's stats
-                let upCount = 0;
-                let failedCount = 0;
-                let totalDataPoints = todayData.length;
-                let totalResponseTime = 0;
-                
-                todayData.forEach(entry => {
-                    if (entry.data.status === true) {
-                        upCount++;
-                    } else if (entry.data.status === false) {
-                        failedCount++;
-                    }
-                    
-                    if (entry.data.responseTimeMs) {
-                        totalResponseTime += entry.data.responseTimeMs;
-                    }
-                });
-                
-                const uptimePercentage = totalDataPoints > 0 ? ((upCount / totalDataPoints) * 100).toFixed(1) : '0.0';
-                const avgResponseTime = totalDataPoints > 0 ? (totalResponseTime / totalDataPoints).toFixed(2) : '0';
-                
-                // Create summary card
-                const summaryCard = document.createElement('div');
-                summaryCard.className = 'bg-white rounded-lg p-5 shadow-sm mb-6';
-                summaryCard.innerHTML = `
-                    <div class="flex items-center mb-4">
-                        <div class="w-2 h-2 rounded-full ${uptimePercentage >= 99.9 ? 'bg-status-up' : uptimePercentage >= 99 ? 'bg-status-degraded' : 'bg-status-down'} mr-2"></div>
-                        <h2 class="text-sm font-medium text-gray-700">Today's Status</h2>
-                        <span class="ml-auto text-xs text-gray-400">${new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</span>
-                    </div>
-                    
-                    <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <span class="text-xs text-gray-500">Uptime</span>
-                            <div class="text-2xl font-medium ${uptimePercentage >= 99.9 ? 'text-status-up' : uptimePercentage >= 99 ? 'text-status-degraded' : 'text-status-down'} mt-1">${uptimePercentage}%</div>
-                        </div>
-                        
-                        <div>
-                            <span class="text-xs text-gray-500">Response</span>
-                            <div class="flex items-baseline mt-1">
-                                <span class="text-2xl font-medium text-gray-700">${avgResponseTime}</span>
-                                <span class="text-xs text-gray-500 ml-1">ms</span>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <span class="text-xs text-gray-500">Checks</span>
-                            <div class="flex gap-3 mt-1">
-                                <div class="flex items-center">
-                                    <span class="text-xl font-medium text-gray-700">${upCount}</span>
-                                    <div class="w-1.5 h-1.5 rounded-full bg-status-up ml-1"></div>
-                                </div>
-                                <div class="flex items-center">
-                                    <span class="text-xl font-medium text-gray-700">${failedCount}</span>
-                                    <div class="w-1.5 h-1.5 rounded-full bg-status-down ml-1"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Insert the summary card before the timeline
-                const dailyTimelineContainer = document.querySelector('.bg-gray-50.rounded-lg.p-6');
-                dailyTimelineContainer.parentNode.insertBefore(summaryCard, dailyTimelineContainer);
-            }
-        }
-
-        // Initialize the status display when the page loads
-        document.addEventListener('DOMContentLoaded', initializeStatusDisplay);
+        });
     </script>
 </body>
 </html>

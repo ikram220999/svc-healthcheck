@@ -4,12 +4,12 @@ services:
   healthcheck:
     build: .
     ports:
-      - "3000:3000"
+      - "3002:3000"
     volumes:
       - ./logs:/app/logs
     environment:
       - PORT=3000
-      - HEALTHCHECK_HOST=http://example.com
-      - HEALTHCHECK_URL=/health
-      - CHECK_INTERVAL_MS=60000
+      - HEALTHCHECK_HOST=http://192.168.0.108:8000
+      - HEALTHCHECK_URL=/api/ping
+      - CHECK_INTERVAL_MS=30000
     restart: unless-stopped 

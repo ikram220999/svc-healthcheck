@@ -6,37 +6,36 @@
  */
 async function checkStatus(baseUrl, healthCheckUrl) {
     try {
+        // Start timing before the request
+        const startTime = performance.now();
+        
         const response = await fetch(`${baseUrl}${healthCheckUrl}`, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
-            }
-        });
+            },
+            // Add timeout to prevent hanging requests
+            signal: AbortSignal.timeout(5000)
+        })
         
-        if (!response.ok) {
+        // Calculate response time immediately after getting the response
+        const responseTimeMs = Math.round(performance.now() - startTime);
+        
+        if (!response || response.status !== 200) {
             return {
                 status: false,
                 timestamp: new Date().toISOString(),
-                responseTimeMs: 0
+                responseTimeMs: responseTimeMs
             }
-        }
+        } 
 
-        // Get the response time in milliseconds
-        // Using performance.now() for more accurate measurement
-        // Note: The Date header method can be inaccurate due to clock differences
-        // between server and client, and lower precision
-        const data = await response.json();
+        return {
+            status: true,
+            timestamp: new Date().toISOString(),
+            responseTimeMs: responseTimeMs
+        }
         
-        // Calculate response time using a more reliable approach
-        // This measures time from when we receive the response
-        const responseTimeMs = Math.round(performance.now() % 1000); // More realistic values
-        
-        // Add response time to the result
-        data.responseTimeMs = responseTimeMs;
-        return data;
-        
-        return await response.json();
     } catch (error) {
         console.error('Error checking status:', error);
         throw error;
