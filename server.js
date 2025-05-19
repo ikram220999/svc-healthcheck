@@ -2,6 +2,9 @@ const express = require('express');
 const path = require('path');
 const app = express();
 let PORT = 3000; // Changed from const to let
+
+// Import the scanner module
+const { checkStatus } = require('./scanner');
 // Load environment variables from .env file
 require('dotenv').config();
 
@@ -141,13 +144,6 @@ app.get('/api/debug/timezone', (req, res) => {
     res.json(debug);
 });
 
-// Import the scanner module
-const { checkStatus } = require('./scanner');
-
-// Define the base URL for the health check
-const BASE_URL = process.env.HEALTHCHECK_HOST || 'http://localhost:3000';
-const HEALTHCHECK_URL = process.env.HEALTHCHECK_URL;
-
 app.get('/api/logs', (req, res) => {
     const fs = require('fs');
     const logDir = path.join(__dirname, 'logs');
@@ -200,72 +196,6 @@ app.get('/api/logs', (req, res) => {
         res.status(500).json({ error: 'Failed to read logs' });
     }
 });
-
-// Set up interval for health checks
-const INTERVAL_MS = process.env.CHECK_INTERVAL_MS || 5000; // Default: 5 seconds
-console.log(`Setting up health check interval every ${INTERVAL_MS}ms`);
-
-// Start periodic health checks
-setInterval(async () => {
-    try {
-        const result = await checkStatus(BASE_URL, HEALTHCHECK_URL);
-        console.log(`Health check at ${new Date().toISOString()}:`, result);
-        // Store health check data in logs folder as JSON
-        const fs = require('fs');
-        const logDir = path.join(__dirname, 'logs');
-        
-        // Create logs directory if it doesn't exist
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir);
-        }
-        
-        // Create filename based on current date in configured timezone
-        const today = new Date();
-        const dateStr = getDateStringInTimezone(today);
-        const logFile = path.join(logDir, `${dateStr}.json`);
-        
-        // Create log entry with timestamp
-        const logEntry = {
-            timestamp: today.toISOString(),
-            timezone: TIMEZONE,
-            data: result
-        };
-        
-        // Initialize logs array
-        let logs = [];
-        
-        // Try to read existing file if it exists
-        if (fs.existsSync(logFile)) {
-            try {
-                const data = fs.readFileSync(logFile, 'utf8');
-                logs = JSON.parse(data);
-                console.log(`Successfully read existing log file: ${logFile}`);
-            } catch (parseErr) {
-                console.error('Error parsing JSON log file:', parseErr);
-                // Continue with empty logs array if file exists but can't be parsed
-            }
-        } else {
-            // Create new log file with empty array
-            logs = [];
-            fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
-            console.log(`Created new log file for date: ${dateStr}`);
-        }
-        
-        // Add new entry
-        logs.push(logEntry);
-        
-        // Write back to file (synchronously to ensure it completes)
-        try {
-            fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
-            console.log(`Successfully wrote to log file: ${logFile}`);
-        } catch (writeErr) {
-            console.error('Error writing to JSON log file:', writeErr);
-        }
-
-    } catch (error) {
-        console.error(`Health check failed at ${new Date().toISOString()}:`, error.message);
-    }
-}, INTERVAL_MS);
 
 // Add an endpoint to manually create today's log file
 app.get('/api/debug/create-today-file', (req, res) => {
@@ -351,6 +281,79 @@ app.get('/api/debug/create-today-file', (req, res) => {
     
     res.json(results);
 });
+
+
+
+// Define the base URL for the health check
+const BASE_URL = process.env.HEALTHCHECK_HOST || 'http://localhost:3000';
+const HEALTHCHECK_URL = process.env.HEALTHCHECK_URL;
+
+// Set up interval for health checks
+const INTERVAL_MS = process.env.CHECK_INTERVAL_MS || 5000; // Default: 5 seconds
+console.log(`Setting up health check interval every ${INTERVAL_MS}ms`);
+
+// Start periodic health checks
+setInterval(async () => {
+    try {
+        const result = await checkStatus(BASE_URL, HEALTHCHECK_URL);
+        console.log(`Health check at ${new Date().toISOString()}:`, result);
+        // Store health check data in logs folder as JSON
+        const fs = require('fs');
+        const logDir = path.join(__dirname, 'logs');
+        
+        // Create logs directory if it doesn't exist
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir);
+        }
+        
+        // Create filename based on current date in configured timezone
+        const today = new Date();
+        const dateStr = getDateStringInTimezone(today);
+        const logFile = path.join(logDir, `${dateStr}.json`);
+        
+        // Create log entry with timestamp
+        const logEntry = {
+            timestamp: today.toISOString(),
+            timezone: TIMEZONE,
+            data: result
+        };
+        
+        // Initialize logs array
+        let logs = [];
+        
+        // Try to read existing file if it exists
+        if (fs.existsSync(logFile)) {
+            try {
+                const data = fs.readFileSync(logFile, 'utf8');
+                logs = JSON.parse(data);
+                console.log(`Successfully read existing log file: ${logFile}`);
+            } catch (parseErr) {
+                console.error('Error parsing JSON log file:', parseErr);
+                // Continue with empty logs array if file exists but can't be parsed
+            }
+        } else {
+            // Create new log file with empty array
+            logs = [];
+            fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
+            console.log(`Created new log file for date: ${dateStr}`);
+        }
+        
+        // Add new entry
+        logs.push(logEntry);
+        
+        // Write back to file (synchronously to ensure it completes)
+        try {
+            fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
+            console.log(`Successfully wrote to log file: ${logFile}`);
+        } catch (writeErr) {
+            console.error('Error writing to JSON log file:', writeErr);
+        }
+
+    } catch (error) {
+        console.error(`Health check failed at ${new Date().toISOString()}:`, error.message);
+    }
+}, INTERVAL_MS);
+
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
